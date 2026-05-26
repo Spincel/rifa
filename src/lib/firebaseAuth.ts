@@ -17,7 +17,8 @@ const userFirebaseConfig = {
   projectId: "rifa-9d394",
   storageBucket: "rifa-9d394.firebasestorage.app",
   messagingSenderId: "793111784517",
-  appId: "1:793111784517:web:19168f5398106d4302c72c",
+  appId: "1:793111784517:web:7d7b619c53559abb02c72c",
+  measurementId: "G-JQNWS314GK",
 };
 
 const resolvedConfig = {
@@ -27,6 +28,7 @@ const resolvedConfig = {
   storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET || userFirebaseConfig.storageBucket || firebaseConfig.storageBucket,
   messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || userFirebaseConfig.messagingSenderId || firebaseConfig.messagingSenderId,
   appId: metaEnv.VITE_FIREBASE_APP_ID || userFirebaseConfig.appId || firebaseConfig.appId,
+  measurementId: metaEnv.VITE_FIREBASE_MEASUREMENT_ID || userFirebaseConfig.measurementId || firebaseConfig.measurementId,
 };
 
 // Reuse existing app or initialize layout
