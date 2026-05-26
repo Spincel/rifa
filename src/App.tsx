@@ -492,6 +492,7 @@ export default function App() {
               raffle={activeRaffle}
               selectedNumber={selectedNumber}
               onSelectNumber={(num) => setSelectedNumber(num)}
+              isAdmin={isAdmin}
             />
           </div>
         )}
@@ -601,6 +602,7 @@ export default function App() {
                   raffle={activeRaffle}
                   selectedNumber={selectedNumber}
                   onSelectNumber={(num) => setSelectedNumber(num)}
+                  isAdmin={isAdmin}
                 />
               )}
 
@@ -683,6 +685,7 @@ export default function App() {
         <TicketFormModal
           raffle={activeRaffle}
           number={selectedNumber}
+          isAdmin={isAdmin}
           onSave={(num, reservation) => {
             handleSaveReservation(num, reservation);
             // Don't close immediately to allow downloading the ticket inside modal tabs

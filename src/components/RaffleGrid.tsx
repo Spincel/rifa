@@ -12,9 +12,10 @@ interface RaffleGridProps {
   raffle: Raffle;
   onSelectNumber: (num: number) => void;
   selectedNumber: number | null;
+  isAdmin: boolean;
 }
 
-export default function RaffleGrid({ raffle, onSelectNumber, selectedNumber }: RaffleGridProps) {
+export default function RaffleGrid({ raffle, onSelectNumber, selectedNumber, isAdmin }: RaffleGridProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'FREE' | 'RESERVED' | 'PAID' | 'ABONADO'>('ALL');
 
@@ -32,11 +33,16 @@ export default function RaffleGrid({ raffle, onSelectNumber, selectedNumber }: R
     const reservation = reservations[num];
 
     if (isSelected) {
-      return 'bg-indigo-50 text-indigo-700 font-extrabold border border-indigo-200 scale-105 shadow-sm ring-4 ring-indigo-550 ring-indigo-500';
+      return 'bg-indigo-50 text-indigo-700 font-extrabold border border-indigo-200 scale-105 shadow-sm ring-4 ring-indigo-500';
     }
 
     if (!reservation) {
-      return 'bg-slate-50 hover:bg-slate-100 text-slate-400 border border-slate-200 hover:scale-105 hover:border-indigo-400';
+      return 'bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 hover:scale-105 hover:border-indigo-400';
+    }
+
+    // If not admin, any reservation is shown as solid RED (occupied)
+    if (!isAdmin) {
+      return 'bg-rose-500 text-white border border-rose-300 font-extrabold opacity-90';
     }
 
     if (reservation.status === 'PAGADO') {
@@ -69,7 +75,9 @@ export default function RaffleGrid({ raffle, onSelectNumber, selectedNumber }: R
       if (fmtNum.includes(q) || String(num).includes(q)) {
         return true;
       }
-      // Or reservation buyer info matching
+      // Or reservation buyer info matching (ONLY FOR ADMINS)
+      if (!isAdmin) return false;
+
       if (!res) return false;
       const nameMatch = res.buyerName.toLowerCase().includes(q);
       const phoneMatch = res.phone.includes(q);
@@ -117,7 +125,7 @@ export default function RaffleGrid({ raffle, onSelectNumber, selectedNumber }: R
       <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-slate-100">
         <button
           onClick={() => setStatusFilter('ALL')}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition ${
+          className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition cursor-pointer ${
             statusFilter === 'ALL'
               ? 'bg-slate-800 border-slate-900 text-white'
               : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -127,7 +135,7 @@ export default function RaffleGrid({ raffle, onSelectNumber, selectedNumber }: R
         </button>
         <button
           onClick={() => setStatusFilter('FREE')}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition ${
+          className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition cursor-pointer ${
             statusFilter === 'FREE'
               ? 'bg-slate-100 border-slate-300 text-slate-800'
               : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -135,36 +143,40 @@ export default function RaffleGrid({ raffle, onSelectNumber, selectedNumber }: R
         >
           Disponibles ({totalFree})
         </button>
-        <button
-          onClick={() => setStatusFilter('RESERVED')}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition ${
-            statusFilter === 'RESERVED'
-              ? 'bg-amber-100 border-amber-300 text-amber-900'
-              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          Apartados ({totalReserved - totalPaid - totalAbonado})
-        </button>
-        <button
-          onClick={() => setStatusFilter('ABONADO')}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition ${
-            statusFilter === 'ABONADO'
-              ? 'bg-purple-100 border-purple-300 text-purple-900'
-              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          Abonados ({totalAbonado})
-        </button>
-        <button
-          onClick={() => setStatusFilter('PAID')}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition ${
-            statusFilter === 'PAID'
-              ? 'bg-emerald-100 border-emerald-300 text-emerald-900'
-              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          Pagados ({totalPaid})
-        </button>
+        {isAdmin && (
+          <>
+            <button
+              onClick={() => setStatusFilter('RESERVED')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition cursor-pointer ${
+                statusFilter === 'RESERVED'
+                  ? 'bg-amber-100 border-amber-300 text-amber-900'
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              Apartados ({totalReserved - totalPaid - totalAbonado})
+            </button>
+            <button
+              onClick={() => setStatusFilter('ABONADO')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition cursor-pointer ${
+                statusFilter === 'ABONADO'
+                  ? 'bg-purple-100 border-purple-300 text-purple-900'
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              Abonados ({totalAbonado})
+            </button>
+            <button
+              onClick={() => setStatusFilter('PAID')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition cursor-pointer ${
+                statusFilter === 'PAID'
+                  ? 'bg-emerald-100 border-emerald-300 text-emerald-900'
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              Pagados ({totalPaid})
+            </button>
+          </>
+        )}
       </div>
 
       {/* Grid wrapper */}
@@ -174,18 +186,20 @@ export default function RaffleGrid({ raffle, onSelectNumber, selectedNumber }: R
           {numbersList.filter(passesFilter).map((num) => {
             const r = reservations[num];
             const fmt = formatTicketNumber(num, totalNumbers);
+            const isOccupied = !!r;
 
             return (
               <button
                 key={num}
                 id={`grid-number-btn-${num}`}
+                disabled={!isAdmin && isOccupied}
                 onClick={() => onSelectNumber(num)}
-                className={`aspect-square sm:aspect-video md:aspect-square flex flex-col items-center justify-center rounded-xl text-sm font-mono tracking-tight transition duration-200 outline-none cursor-pointer ${getNumberColorClass(
-                  num
-                )}`}
+                className={`aspect-square sm:aspect-video md:aspect-square flex flex-col items-center justify-center rounded-xl text-sm font-mono tracking-tight transition duration-200 outline-none ${
+                  !isAdmin && isOccupied ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'
+                } ${getNumberColorClass(num)}`}
               >
                 <span className="text-base font-bold">{fmt}</span>
-                {r && (
+                {isAdmin && r && (
                   <span className="text-[9px] font-sans truncate max-w-[55px] font-normal leading-3 opacity-90 hidden sm:inline-block">
                     {r.buyerName.split(' ')[0]}
                   </span>
@@ -206,26 +220,30 @@ export default function RaffleGrid({ raffle, onSelectNumber, selectedNumber }: R
       </div>
 
       {/* Fast Visual References (Legend) */}
-      <div className="bg-slate-50 rounded-xl p-4 flex flex-wrap gap-y-3 justify-around border border-slate-200/60">
+      <div className="bg-slate-50 rounded-xl p-4 flex flex-wrap gap-y-3 justify-around border border-slate-200/60 font-sans">
         <div className="flex items-center space-x-2 text-xs font-semibold">
-          <span className="w-3.5 h-3.5 rounded bg-slate-50 border border-slate-200"></span>
-          <span className="text-slate-400">Libre</span>
+          <span className="w-3.5 h-3.5 rounded bg-white border border-slate-200"></span>
+          <span className="text-slate-400">Libre (Disponible)</span>
         </div>
         <div className="flex items-center space-x-2 text-xs font-semibold">
           <span className="w-3.5 h-3.5 rounded bg-rose-500 border border-rose-200"></span>
-          <span className="text-rose-500">Reservado</span>
+          <span className="text-rose-500">Ocupado</span>
         </div>
-        <div className="flex items-center space-x-2 text-xs font-semibold">
-          <span className="w-3.5 h-3.5 rounded bg-amber-400 border border-amber-200"></span>
-          <span className="text-amber-500">Abono</span>
-        </div>
-        <div className="flex items-center space-x-2 text-xs font-semibold">
-          <span className="w-3.5 h-3.5 rounded bg-emerald-500 border border-emerald-200"></span>
-          <span className="text-emerald-500">Pagado</span>
-        </div>
+        {isAdmin && (
+          <>
+            <div className="flex items-center space-x-2 text-xs font-semibold">
+              <span className="w-3.5 h-3.5 rounded bg-amber-400 border border-amber-200"></span>
+              <span className="text-amber-500 font-medium">Abono</span>
+            </div>
+            <div className="flex items-center space-x-2 text-xs font-semibold">
+              <span className="w-3.5 h-3.5 rounded bg-emerald-500 border border-emerald-250 border-emerald-200"></span>
+              <span className="text-emerald-500 font-medium">Pagado</span>
+            </div>
+          </>
+        )}
         <div className="flex items-center space-x-2 text-xs font-semibold">
           <span className="w-3.5 h-3.5 rounded bg-indigo-50 border border-indigo-200 ring-2 ring-indigo-500"></span>
-          <span className="text-indigo-600">Selección</span>
+          <span className="text-indigo-600">Tu selección</span>
         </div>
       </div>
     </div>

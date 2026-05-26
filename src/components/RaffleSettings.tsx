@@ -33,6 +33,7 @@ export default function RaffleSettings({ raffle, onSave }: RaffleSettingsProps) 
   const [currency, setCurrency] = useState(raffle.currency);
   const [ticketColor, setTicketColor] = useState(raffle.ticketColor || 'emerald');
   const [description, setDescription] = useState(raffle.description || '');
+  const [adminPhone, setAdminPhone] = useState(raffle.adminPhone || '');
 
   const [notifMsg, setNotifMsg] = useState('');
   const [warningMsg, setWarningMsg] = useState('');
@@ -49,6 +50,7 @@ export default function RaffleSettings({ raffle, onSave }: RaffleSettingsProps) 
     setCurrency(raffle.currency);
     setTicketColor(raffle.ticketColor || 'emerald');
     setDescription(raffle.description || '');
+    setAdminPhone(raffle.adminPhone || '');
     setNotifMsg('');
     setWarningMsg('');
   }, [raffle]);
@@ -87,6 +89,7 @@ export default function RaffleSettings({ raffle, onSave }: RaffleSettingsProps) 
       currency,
       ticketColor,
       description: description.trim(),
+      adminPhone: adminPhone.trim(),
     });
 
     setNotifMsg('¡Configuración de la rifa guardada correctamente!');
@@ -166,6 +169,20 @@ export default function RaffleSettings({ raffle, onSave }: RaffleSettingsProps) 
               rows={3}
               className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-800 transition"
             />
+          </div>
+
+          {/* Admin WhatsApp/Phone */}
+          <div className="space-y-1.5">
+            <label htmlFor="adminPhone" className="text-xs font-semibold text-slate-700">Teléfono WhatsApp del Administrador (Recibe solicitudes)</label>
+            <input
+              type="text"
+              id="adminPhone"
+              value={adminPhone}
+              onChange={(e) => setAdminPhone(e.target.value)}
+              placeholder="Ej. 5215512345678 (Incluir código de país sin +)"
+              className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-800 transition"
+            />
+            <p className="text-[10px] text-slate-400">Los compradores recibirán un botón para enviar un mensaje directo a este WhatsApp con los datos de su apartado.</p>
           </div>
         </div>
 

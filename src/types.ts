@@ -28,6 +28,7 @@ export interface Raffle {
   reservations: { [number: number]: TicketReservation };
   ticketColor: string; // Theme color for this raffle ticket visual
   description?: string;
+  adminPhone?: string; // Admin's WhatsApp/phone number
   spreadsheetId?: string; // Google Sheets ID linked to this raffle
   spreadsheetUrl?: string; // Google Sheets browser Link
 }
