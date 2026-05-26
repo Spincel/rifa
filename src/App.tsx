@@ -50,6 +50,7 @@ export default function App() {
   const [raffles, setRaffles] = useState<Raffle[]>([]);
   const [activeRaffleId, setActiveRaffleId] = useState<string>('');
   const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
+  const [selectedMultipleNumbers, setSelectedMultipleNumbers] = useState<number[] | null>(null);
   const [activeTab, setActiveTab] = useState<'GRID' | 'TABLE' | 'STATS' | 'DRAW' | 'SETTINGS'>('GRID');
   const [viewingRaffleId, setViewingRaffleId] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
@@ -492,6 +493,7 @@ export default function App() {
               raffle={activeRaffle}
               selectedNumber={selectedNumber}
               onSelectNumber={(num) => setSelectedNumber(num)}
+              onSelectMultipleNumbers={setSelectedMultipleNumbers}
               isAdmin={isAdmin}
             />
           </div>
@@ -602,6 +604,7 @@ export default function App() {
                   raffle={activeRaffle}
                   selectedNumber={selectedNumber}
                   onSelectNumber={(num) => setSelectedNumber(num)}
+                  onSelectMultipleNumbers={setSelectedMultipleNumbers}
                   isAdmin={isAdmin}
                 />
               )}
@@ -695,6 +698,21 @@ export default function App() {
             setSelectedNumber(null);
           }}
           onClose={() => setSelectedNumber(null)}
+        />
+      )}
+
+      {selectedMultipleNumbers !== null && (
+        <TicketFormModal
+          raffle={activeRaffle}
+          numbers={selectedMultipleNumbers}
+          isAdmin={isAdmin}
+          onSave={(num, reservation) => {
+            handleSaveReservation(num, reservation);
+          }}
+          onDelete={(num) => {
+            handleDeleteReservation(num);
+          }}
+          onClose={() => setSelectedMultipleNumbers(null)}
         />
       )}
 

@@ -4,20 +4,25 @@
  */
 
 import React, { useState } from 'react';
-import { Search, Filter, Layers, CheckCircle2, Ticket, Sparkles } from 'lucide-react';
+import { Search, Filter, Layers, CheckCircle2, Ticket, Sparkles, Check, X } from 'lucide-react';
 import { Raffle, TicketReservation } from '../types';
 import { formatTicketNumber } from '../utils';
 
 interface RaffleGridProps {
   raffle: Raffle;
   onSelectNumber: (num: number) => void;
+  onSelectMultipleNumbers?: (nums: number[]) => void;
   selectedNumber: number | null;
   isAdmin: boolean;
 }
 
-export default function RaffleGrid({ raffle, onSelectNumber, selectedNumber, isAdmin }: RaffleGridProps) {
+export default function RaffleGrid({ raffle, onSelectNumber, onSelectMultipleNumbers, selectedNumber, isAdmin }: RaffleGridProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'FREE' | 'RESERVED' | 'PAID' | 'ABONADO'>('ALL');
+
+  // Multi-selection state
+  const [isMultiMode, setIsMultiMode] = useState(false);
+  const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
 
   const { totalNumbers, numberOffset, reservations } = raffle;
 
@@ -27,13 +32,36 @@ export default function RaffleGrid({ raffle, onSelectNumber, selectedNumber, isA
     numbersList.push(i);
   }
 
+  // Toggle multi-select mode
+  const handleToggleMultiMode = () => {
+    setIsMultiMode(!isMultiMode);
+    setSelectedNumbers([]);
+  };
+
+  // Click handler for grid cells
+  const handleCellClick = (num: number) => {
+    const isOccupied = !!reservations[num];
+
+    if (isMultiMode) {
+      if (isOccupied && !isAdmin) return; // Non-admins can't select occupied numbers
+
+      if (selectedNumbers.includes(num)) {
+        setSelectedNumbers(selectedNumbers.filter(n => n !== num));
+      } else {
+        setSelectedNumbers([...selectedNumbers, num]);
+      }
+    } else {
+      onSelectNumber(num);
+    }
+  };
+
   // Get color depending on reservation status
   const getNumberColorClass = (num: number) => {
-    const isSelected = selectedNumber === num;
+    const isSelected = isMultiMode ? selectedNumbers.includes(num) : selectedNumber === num;
     const reservation = reservations[num];
 
     if (isSelected) {
-      return 'bg-indigo-50 text-indigo-700 font-extrabold border border-indigo-200 scale-105 shadow-sm ring-4 ring-indigo-500';
+      return 'bg-indigo-600 text-white font-extrabold border-2 border-indigo-300 scale-105 shadow-md ring-4 ring-indigo-500/30';
     }
 
     if (!reservation) {
@@ -95,15 +123,35 @@ export default function RaffleGrid({ raffle, onSelectNumber, selectedNumber, isA
   const totalFree = totalNumbers - totalReserved;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
+    <div className="bg-white rounded-2xl border border-slate-205 border-slate-200 shadow-sm p-6 space-y-6">
       {/* Header and Filter Block */}
       <div className="flex flex-col space-y-4 md:space-y-0 md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-            <Ticket className="w-5 h-5 text-slate-700" />
-            Tablero de Números
-          </h2>
-          <p className="text-xs text-slate-400">Haz clic en un número para reservarlo o gestionar su estado.</p>
+          <div className="flex flex-wrap items-center gap-2.5 mb-1 select-none">
+            <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <Ticket className="w-5 h-5 text-indigo-600" />
+              Tablero de Números
+            </h2>
+            <button
+              type="button"
+              onClick={handleToggleMultiMode}
+              id="btn-toggle-multi"
+              className={`px-2.5 py-0.5 text-[10px] font-extrabold rounded-full transition-all flex items-center space-x-1 cursor-pointer border shadow-xs ${
+                isMultiMode
+                  ? 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700 animate-pulse'
+                  : 'bg-indigo-50 text-indigo-650 border-indigo-150 hover:bg-indigo-100/80'
+              }`}
+            >
+              <Sparkles className="w-3 h-3 text-current" />
+              <span>{isMultiMode ? 'Selección Múltiple: ACTIVA' : 'Seleccionar Varios'}</span>
+            </button>
+          </div>
+          <p className="text-xs text-slate-400">
+            {isMultiMode
+              ? 'Haz clic en múltiples números libres para apartarlos juntos.'
+              : 'Haz clic en un número libre para apartarlo o ver detalles.'
+            }
+          </p>
         </div>
 
         {/* Real-time Search Panel */}
@@ -193,9 +241,9 @@ export default function RaffleGrid({ raffle, onSelectNumber, selectedNumber, isA
                 key={num}
                 id={`grid-number-btn-${num}`}
                 disabled={!isAdmin && isOccupied}
-                onClick={() => onSelectNumber(num)}
+                onClick={() => handleCellClick(num)}
                 className={`aspect-square sm:aspect-video md:aspect-square flex flex-col items-center justify-center rounded-xl text-sm font-mono tracking-tight transition duration-200 outline-none ${
-                  !isAdmin && isOccupied ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'
+                  !isAdmin && isOccupied ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'
                 } ${getNumberColorClass(num)}`}
               >
                 <span className="text-base font-bold">{fmt}</span>
@@ -218,6 +266,43 @@ export default function RaffleGrid({ raffle, onSelectNumber, selectedNumber, isA
           </div>
         )}
       </div>
+
+      {/* sticky bottom multi-selection feedback banner */}
+      {isMultiMode && selectedNumbers.length > 0 && (
+        <div className="bg-slate-900 text-white rounded-2xl p-4 md:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl border border-slate-800 animate-slide-up sticky bottom-0 z-30 font-sans">
+          <div className="flex items-center space-x-3.5 text-center sm:text-left">
+            <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-extrabold font-mono shadow-inner shrink-0">
+              {selectedNumbers.length}
+            </div>
+            <div>
+              <p className="text-sm font-extrabold text-white">Boletos en tu carrito</p>
+              <p className="text-[11px] text-slate-400 font-semibold font-mono tracking-tight max-w-sm break-all">
+                {selectedNumbers.map(n => '#' + formatTicketNumber(n, totalNumbers)).join(', ')}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2 w-full sm:w-auto shrink-0 justify-end">
+            <button
+              onClick={() => setSelectedNumbers([])}
+              className="px-3.5 py-2.5 text-xs font-semibold text-slate-400 hover:text-white rounded-xl transition hover:bg-slate-800 cursor-pointer text-center"
+            >
+              Limpiar
+            </button>
+            <button
+              onClick={() => {
+                if (onSelectMultipleNumbers) {
+                  onSelectMultipleNumbers(selectedNumbers);
+                }
+              }}
+              id="btn-confirm-multi-select"
+              className="px-5 py-2.5 text-xs font-black bg-indigo-600 hover:bg-indigo-700 hover:scale-[1.02] text-white rounded-xl transition shadow-lg hover:shadow-indigo-500/20 flex items-center justify-center space-x-1.5 cursor-pointer"
+            >
+              <span>Apartar Boletos</span>
+              <Check className="w-4 h-4 text-white" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Fast Visual References (Legend) */}
       <div className="bg-slate-50 rounded-xl p-4 flex flex-wrap gap-y-3 justify-around border border-slate-200/60 font-sans">
@@ -242,7 +327,7 @@ export default function RaffleGrid({ raffle, onSelectNumber, selectedNumber, isA
           </>
         )}
         <div className="flex items-center space-x-2 text-xs font-semibold">
-          <span className="w-3.5 h-3.5 rounded bg-indigo-50 border border-indigo-200 ring-2 ring-indigo-500"></span>
+          <span className="w-3.5 h-3.5 rounded bg-indigo-600 border border-indigo-300 ring-2 ring-indigo-500/30"></span>
           <span className="text-indigo-600">Tu selección</span>
         </div>
       </div>

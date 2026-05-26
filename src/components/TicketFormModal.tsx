@@ -11,15 +11,17 @@ import TicketCanvas from './TicketCanvas';
 
 interface TicketFormModalProps {
   raffle: Raffle;
-  number: number;
+  number?: number | null;
+  numbers?: number[];
   isAdmin: boolean;
   onSave: (num: number, reservation: TicketReservation) => void;
-  onDelete: (num: number) => void;
+  onDelete?: (num: number) => void;
   onClose: () => void;
 }
 
-export default function TicketFormModal({ raffle, number, isAdmin, onSave, onDelete, onClose }: TicketFormModalProps) {
-  const existingReservation = raffle.reservations[number];
+export default function TicketFormModal({ raffle, number, numbers, isAdmin, onSave, onDelete, onClose }: TicketFormModalProps) {
+  const isMulti = !!numbers && numbers.length > 0;
+  const existingReservation = isMulti ? undefined : (number ? raffle.reservations[number] : undefined);
 
   // Tab state: 'FORM' or 'TICKET'
   const [activeTab, setActiveTab] = useState<'FORM' | 'TICKET'>(existingReservation ? 'TICKET' : 'FORM');
@@ -52,7 +54,7 @@ export default function TicketFormModal({ raffle, number, isAdmin, onSave, onDel
     }
     setErrorMsg('');
     setIsSubmitted(false);
-  }, [existingReservation, number]);
+  }, [existingReservation, number, isMulti]);
 
   // Adjust paid amount according to payment status
   const handleStatusChange = (newStatus: PaymentStatus) => {
@@ -92,34 +94,58 @@ export default function TicketFormModal({ raffle, number, isAdmin, onSave, onDel
       }
     }
 
-    const payload: TicketReservation = {
-      number,
-      buyerName: buyerName.trim(),
-      phone: phone.trim(),
-      status: isAdmin ? status : 'NO_PAGADO', // Non-admins always reserve as unpaid/apartado first
-      amountPaid: isAdmin ? (status === 'PAGADO' ? raffle.ticketPrice : (status === 'NO_PAGADO' ? 0 : amountPaid)) : 0,
-      notes: isAdmin ? notes.trim() : 'Apartado por cliente desde la web',
-      reservedAt: existingReservation ? existingReservation.reservedAt : new Date().toISOString(),
-    };
+    if (isMulti && numbers) {
+      const reservedAt = new Date().toISOString();
+      numbers.forEach((num) => {
+        const payload: TicketReservation = {
+          number: num,
+          buyerName: buyerName.trim(),
+          phone: phone.trim(),
+          status: isAdmin ? status : 'NO_PAGADO', // Non-admins always reserve as unpaid/apartado first
+          amountPaid: isAdmin ? (status === 'PAGADO' ? raffle.ticketPrice : (status === 'NO_PAGADO' ? 0 : amountPaid)) : 0,
+          notes: isAdmin ? notes.trim() : 'Apartado por cliente desde la web (Multi)',
+          reservedAt,
+        };
+        onSave(num, payload);
+      });
 
-    onSave(number, payload);
-    
-    if (!isAdmin) {
-      setIsSubmitted(true);
-    } else {
-      // Switch to ticket view if successful (admin only)
-      setActiveTab('TICKET');
+      if (!isAdmin) {
+        setIsSubmitted(true);
+      } else {
+        onClose();
+      }
+    } else if (number) {
+      const payload: TicketReservation = {
+        number,
+        buyerName: buyerName.trim(),
+        phone: phone.trim(),
+        status: isAdmin ? status : 'NO_PAGADO', // Non-admins always reserve as unpaid/apartado first
+        amountPaid: isAdmin ? (status === 'PAGADO' ? raffle.ticketPrice : (status === 'NO_PAGADO' ? 0 : amountPaid)) : 0,
+        notes: isAdmin ? notes.trim() : 'Apartado por cliente desde la web',
+        reservedAt: existingReservation ? existingReservation.reservedAt : new Date().toISOString(),
+      };
+
+      onSave(number, payload);
+      
+      if (!isAdmin) {
+        setIsSubmitted(true);
+      } else {
+        // Switch to ticket view if successful (admin only)
+        setActiveTab('TICKET');
+      }
     }
   };
 
   const handleDelete = () => {
-    if (window.confirm('¿Estás seguro de liberar este número? Se borrarán todos los datos del participante.')) {
-      onDelete(number);
-      onClose();
+    if (number && onDelete) {
+      if (window.confirm('¿Estás seguro de liberar este número? Se borrarán todos los datos del participante.')) {
+        onDelete(number);
+        onClose();
+      }
     }
   };
 
-  const numFormatted = formatTicketNumber(number, raffle.totalNumbers);
+  const numFormatted = number ? formatTicketNumber(number, raffle.totalNumbers) : '';
 
   return (
     <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-fade-in">
@@ -189,32 +215,50 @@ export default function TicketFormModal({ raffle, number, isAdmin, onSave, onDel
                 <Check className="w-8 h-8" />
               </div>
               <div>
-                <h3 className="text-xl font-black text-slate-800">¡Boleto Pre-Apartado!</h3>
-                <p className="text-xs text-slate-400 mt-1 font-mono">ID: #{numFormatted}-{Date.now().toString().slice(-4)}</p>
+                <h3 className="text-xl font-black text-slate-800">
+                  {isMulti ? '¡Boletos Pre-Apartados!' : '¡Boleto Pre-Apartado!'}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1 font-mono">
+                  ID: #{isMulti ? formatTicketNumber(numbers![0], raffle.totalNumbers) : numFormatted}-{Date.now().toString().slice(-4)}
+                </p>
               </div>
 
               <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4.5 space-y-3.5 text-left shadow-sm">
-                <div className="flex justify-between items-center text-xs pb-2 border-b border-slate-200">
-                  <span className="text-slate-400 font-semibold uppercase font-mono">Boleto Seleccionado:</span>
-                  <span className="text-indigo-600 font-extrabold font-mono text-base bg-indigo-50 px-2.5 py-0.5 rounded-lg border border-indigo-200">
-                    #{numFormatted}
+                <div className="flex flex-col gap-1 text-xs pb-2 border-b border-slate-200">
+                  <span className="text-slate-400 font-semibold uppercase font-mono">
+                    {isMulti ? 'Boletos Seleccionados:' : 'Boleto Seleccionado:'}
                   </span>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {isMulti ? (
+                      numbers!.map(n => (
+                        <span key={n} className="text-indigo-750 font-extrabold font-mono text-xs bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-150 border-indigo-100 uppercase">
+                          #{formatTicketNumber(n, raffle.totalNumbers)}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-indigo-650 font-extrabold font-mono text-xs bg-indigo-55 px-2 py-0.5 rounded-lg border border-indigo-200">
+                        #{numFormatted}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="text-xs space-y-1 text-slate-650 text-slate-600">
+                <div className="text-xs space-y-1 text-slate-600">
                   <p><strong>A nombre de:</strong> {buyerName}</p>
                   <p><strong>Teléfono:</strong> {phone}</p>
                   <p><strong>Rifa:</strong> {raffle.title}</p>
-                  <p><strong>Monto:</strong> <span className="text-emerald-600 font-bold">{formatCurrency(raffle.ticketPrice, raffle.currency)}</span></p>
+                  <p><strong>Monto Total:</strong> <span className="text-emerald-600 font-extrabold">{formatCurrency((isMulti ? numbers!.length : 1) * raffle.ticketPrice, raffle.currency)}</span></p>
                 </div>
                 <div className="bg-amber-50 border border-amber-200 text-amber-900 text-[11px] p-3 rounded-xl font-medium leading-relaxed">
-                  ⚠️ <strong>Instrucciones:</strong> Tu boleto está pre-apartado de manera temporal. Envía un mensaje de WhatsApp al administrador usando el botón de abajo para coordinar tu método de pago y confirmarlo.
+                  ⚠️ <strong>Instrucciones:</strong> Tu reservación está pre-apartada. Envía un mensaje de WhatsApp al administrador usando el botón de abajo para coordinar tu método de pago y confirmarlo.
                 </div>
               </div>
 
-              <div className="space-y-3 pt-2">
+               <div className="space-y-3 pt-2">
                 <a
                   href={`https://wa.me/${raffle.adminPhone ? raffle.adminPhone.replace(/\D/g, '') : ''}?text=${encodeURIComponent(
-                    `¡Hola! Acabo de apartar el boleto #${numFormatted} para el sorteo "${raffle.title}". Mi nombre es ${buyerName.trim()}. ¿Cómo realizo el pago para confirmarlo?`
+                    isMulti
+                      ? `¡Hola! Acabo de apartar los boletos: ${numbers!.map(n => `#` + formatTicketNumber(n, raffle.totalNumbers)).join(', ')} para el sorteo "${raffle.title}". Mi nombre es ${buyerName.trim()}. ¿Cómo realizo el pago para confirmarlos?`
+                      : `¡Hola! Acabo de apartar el boleto #${numFormatted} para el sorteo "${raffle.title}". Mi nombre es ${buyerName.trim()}. ¿Cómo realizo el pago para confirmarlo?`
                   )}`}
                   target="_blank"
                   rel="noreferrer"
@@ -227,27 +271,29 @@ export default function TicketFormModal({ raffle, number, isAdmin, onSave, onDel
                   <span>Enviar WhatsApp al Administrador</span>
                 </a>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Force generate a mock/local representation for digital canvas view
-                    raffle.reservations[number] = {
-                      number,
-                      buyerName: buyerName.trim(),
-                      phone: phone.trim(),
-                      status: 'NO_PAGADO',
-                      amountPaid: 0,
-                      notes: 'Pre-apartado',
-                      reservedAt: new Date().toISOString()
-                    };
-                    setActiveTab('TICKET');
-                    setIsSubmitted(false);
-                  }}
-                  id="btn-view-receipt-unpaid"
-                  className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition cursor-pointer font-sans"
-                >
-                  🎫 Ver mi Boleto Digital
-                </button>
+                {/* Let clients see their first digital ticket block only if single */}
+                {!isMulti && number && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      raffle.reservations[number] = {
+                        number,
+                        buyerName: buyerName.trim(),
+                        phone: phone.trim(),
+                        status: 'NO_PAGADO',
+                        amountPaid: 0,
+                        notes: 'Pre-apartado',
+                        reservedAt: new Date().toISOString()
+                      };
+                      setActiveTab('TICKET');
+                      setIsSubmitted(false);
+                    }}
+                    id="btn-view-receipt-unpaid"
+                    className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition cursor-pointer font-sans"
+                  >
+                    🎫 Ver mi Boleto Digital
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -271,14 +317,21 @@ export default function TicketFormModal({ raffle, number, isAdmin, onSave, onDel
               )}
 
               {/* Informative Header */}
-              <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-4 flex justify-between items-center text-xs">
+              <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-4 flex justify-between items-center text-xs font-sans">
                 <div>
                   <span className="text-slate-400 uppercase font-mono tracking-wider block mb-1">Rifa Activa</span>
                   <strong className="text-slate-800 text-sm">{raffle.title}</strong>
                 </div>
                 <div className="text-right">
-                  <span className="text-slate-400 uppercase font-mono tracking-wider block mb-1">Precio por Boleto</span>
-                  <strong className="text-emerald-600 text-sm font-bold">{formatCurrency(raffle.ticketPrice, raffle.currency)}</strong>
+                  <span className="text-slate-400 uppercase font-mono tracking-wider block mb-1">
+                    {isMulti ? `Precio Total (${numbers!.length} Boletos)` : 'Precio por Boleto'}
+                  </span>
+                  <strong className="text-emerald-600 text-sm font-bold">
+                    {isMulti 
+                      ? formatCurrency(raffle.ticketPrice * numbers!.length, raffle.currency)
+                      : formatCurrency(raffle.ticketPrice, raffle.currency)
+                    }
+                  </strong>
                 </div>
               </div>
 
@@ -287,6 +340,20 @@ export default function TicketFormModal({ raffle, number, isAdmin, onSave, onDel
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-2">
                   Datos del Comprador
                 </h4>
+
+                {/* List of multi tickets display if there are many */}
+                {isMulti && (
+                  <div className="p-3 bg-slate-50 border border-slate-200/60 rounded-xl space-y-1.5">
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold font-mono">Números Seleccionados a tu nombre:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {numbers!.map(num => (
+                        <span key={num} className="inline-block text-xs font-bold font-mono text-indigo-700 bg-indigo-50 border border-indigo-150 border-indigo-100 px-2 py-0.5 rounded-md">
+                          #{formatTicketNumber(num, raffle.totalNumbers)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
                 {/* Name */}
                 <div className="space-y-1.5">
