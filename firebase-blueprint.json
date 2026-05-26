@@ -1,0 +1,50 @@
+{
+  "entities": {
+    "Raffle": {
+      "title": "Raffle",
+      "description": "Definition of a raffle event configuration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "prize": { "type": "string" },
+        "ticketPrice": { "type": "number" },
+        "totalNumbers": { "type": "number" },
+        "numberOffset": { "type": "number" },
+        "drawDate": { "type": "string" },
+        "drawTime": { "type": "string" },
+        "currency": { "type": "string" },
+        "ticketColor": { "type": "string" },
+        "description": { "type": "string" },
+        "spreadsheetId": { "type": "string" },
+        "spreadsheetUrl": { "type": "string" }
+      },
+      "required": ["id", "title", "prize", "ticketPrice", "totalNumbers", "numberOffset", "drawDate", "drawTime", "currency", "ticketColor"]
+    },
+    "TicketReservation": {
+      "title": "TicketReservation",
+      "description": "Reservation details for a single lottery ticket",
+      "type": "object",
+      "properties": {
+        "number": { "type": "number" },
+        "buyerName": { "type": "string" },
+        "phone": { "type": "string" },
+        "status": { "type": "string", "enum": ["PAGADO", "NO_PAGADO", "ABONADO"] },
+        "amountPaid": { "type": "number" },
+        "notes": { "type": "string" },
+        "reservedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["number", "buyerName", "phone", "status", "amountPaid", "reservedAt"]
+    }
+  },
+  "firestore": {
+    "/raffles/{raffleId}": {
+      "schema": "Raffle",
+      "description": "Root collection representing raffle configurations"
+    },
+    "/raffles/{raffleId}/reservations/{numberId}": {
+      "schema": "TicketReservation",
+      "description": "Subcollection storing ticket reservations by number for scaling and high-concurrency"
+    }
+  }
+}

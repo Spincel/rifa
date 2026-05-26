@@ -5,6 +5,7 @@
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User, Auth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Resolve Firebase config with optional dynamic environment overrides for custom production hosting (e.g. Vercel)
@@ -31,6 +32,7 @@ const resolvedConfig = {
 // Reuse existing app or initialize layout
 const app = getApps().length > 0 ? getApp() : initializeApp(resolvedConfig);
 export const auth: Auth = getAuth(app);
+export const db = getFirestore(app);
 
 const provider = new GoogleAuthProvider();
 // Request necessary Google Sheets and Google Drive permissions

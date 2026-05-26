@@ -15,6 +15,16 @@ import RaffleListTable from './components/RaffleListTable';
 import RandomWinnerPicker from './components/RandomWinnerPicker';
 import { User } from 'firebase/auth';
 import { initAuth } from './lib/firebaseAuth';
+import {
+  subscribeToRaffles,
+  subscribeToReservations,
+  saveRaffleMetadata,
+  deleteRaffle,
+  saveReservation,
+  deleteReservation,
+  importReservations,
+  clearAllReservations
+} from './lib/firebaseDb';
 import GoogleSheetsSync from './components/GoogleSheetsSync';
 
 const LOCAL_STORAGE_KEY = 'GESTOR_DE_RIFAS_SESSION_DATA_v1';
@@ -95,49 +105,48 @@ export default function App() {
     };
   }, []);
 
-  // 1. Initial State Loading from LocalStorage
+  // 1. Initial State Loading & Real-time Subscription from Firestore
   useEffect(() => {
-    try {
-      const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (savedData) {
-        let parsed = JSON.parse(savedData);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // If the user's default raffle is untouched, update to 1 to 300
-          parsed = parsed.map((r: Raffle) => {
-            if (r.id === 'default-rifa-1' && r.totalNumbers === 100 && Object.keys(r.reservations).length === 0) {
-              return { ...r, totalNumbers: 300, numberOffset: 1 };
-            }
-            return r;
-          });
-          setRaffles(parsed);
-          setActiveRaffleId(parsed[0].id);
-          return;
-        }
+    const unsubscribe = subscribeToRaffles(async (fetchedRaffles) => {
+      if (fetchedRaffles.length === 0) {
+        // Seed first raffle if empty to ensure initial data presence
+        const defaultRaffle = DEFAULT_RAFFLES[0];
+        await saveRaffleMetadata(defaultRaffle);
+        return;
       }
-    } catch (e) {
-      console.error('Failed to load raffle database from local storage', e);
-    }
+      setRaffles(fetchedRaffles);
+      setActiveRaffleId((prev) => {
+        if (!prev || !fetchedRaffles.some((r) => r.id === prev)) {
+          return fetchedRaffles[0].id;
+        }
+        return prev;
+      });
+    });
 
-    // Fallback block to seed state
-    setRaffles(DEFAULT_RAFFLES);
-    setActiveRaffleId(DEFAULT_RAFFLES[0].id);
+    return () => unsubscribe();
   }, []);
 
-  // 2. Synchronize any State changes directly back to localStorage
-  const saveToStorage = (updatedRaffles: Raffle[]) => {
-    try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedRaffles));
-    } catch (e) {
-      console.error('Failed to save state to localStorage', e);
-    }
-  };
+  // 2. Real-time Subscription to active reservations
+  useEffect(() => {
+    if (!activeRaffleId) return;
+    const unsubscribe = subscribeToReservations(activeRaffleId, (activeReservations) => {
+      setRaffles((prevRaffles) =>
+        prevRaffles.map((r) => {
+          if (r.id !== activeRaffleId) return r;
+          return { ...r, reservations: activeReservations };
+        })
+      );
+    });
+
+    return () => unsubscribe();
+  }, [activeRaffleId]);
 
   // Get active raffle configuration
   const activeRaffle = raffles.find((r) => r.id === activeRaffleId) || raffles[0];
 
   // Callback to create a brand new empty raffle
-  const handleCreateRaffle = (title: string, prize: string, price: number, total: number, color: string) => {
-    const newRaffle: Raffle = {
+  const handleCreateRaffle = async (title: string, prize: string, price: number, total: number, color: string) => {
+    const newRaffle = {
       id: `raffle-id-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       title,
       prize,
@@ -148,104 +157,55 @@ export default function App() {
       drawTime: '19:00',
       currency: 'MXN',
       ticketColor: color,
-      reservations: {},
       description: 'Sorteo organizado de manera autónoma. ¡Apoya y gana!'
     };
 
-    const nextRaffles = [newRaffle, ...raffles];
-    setRaffles(nextRaffles);
     setActiveRaffleId(newRaffle.id);
-    saveToStorage(nextRaffles);
+    await saveRaffleMetadata(newRaffle);
   };
 
   // Callback to erase/delete a raffle catalog
-  const handleDeleteRaffle = (id: string) => {
-    const nextRaffles = raffles.filter((r) => r.id !== id);
-    if (nextRaffles.length === 0) {
-      // Re-seed default so list never becomes empty of entities
-      const resetList = [...DEFAULT_RAFFLES];
-      setRaffles(resetList);
-      setActiveRaffleId(resetList[0].id);
-      saveToStorage(resetList);
-    } else {
-      setRaffles(nextRaffles);
-      setActiveRaffleId(nextRaffles[0].id);
-      saveToStorage(nextRaffles);
-    }
+  const handleDeleteRaffle = async (id: string) => {
+    await deleteRaffle(id);
   };
 
   // Callback to save/overwrite a ticket reservation
-  const handleSaveReservation = (num: number, reservation: TicketReservation) => {
-    const nextRaffles = raffles.map((r) => {
-      if (r.id !== activeRaffleId) return r;
-      return {
-        ...r,
-        reservations: {
-          ...r.reservations,
-          [num]: reservation
-        }
-      };
-    });
-
-    setRaffles(nextRaffles);
-    saveToStorage(nextRaffles);
+  const handleSaveReservation = async (num: number, reservation: TicketReservation) => {
+    await saveReservation(activeRaffleId, reservation);
   };
 
   // Callback to delete/free a number reservation
-  const handleDeleteReservation = (num: number) => {
-    const nextRaffles = raffles.map((r) => {
-      if (r.id !== activeRaffleId) return r;
-      
-      const updatedReservations = { ...r.reservations };
-      delete updatedReservations[num];
-
-      return {
-        ...r,
-        reservations: updatedReservations
-      };
-    });
-
-    setRaffles(nextRaffles);
-    saveToStorage(nextRaffles);
+  const handleDeleteReservation = async (num: number) => {
+    await deleteReservation(activeRaffleId, num);
   };
 
   // Callback to mass load imported reservations on a backup restore
-  const handleImportReservations = (imported: { [number: number]: TicketReservation }) => {
-    const nextRaffles = raffles.map((r) => {
-      if (r.id !== activeRaffleId) return r;
-      return {
-        ...r,
-        reservations: imported
-      };
-    });
-
-    setRaffles(nextRaffles);
-    saveToStorage(nextRaffles);
+  const handleImportReservations = async (imported: { [number: number]: TicketReservation }) => {
+    await importReservations(activeRaffleId, imported);
   };
 
   // Callback to clear/restart reservations of an active raffle
-  const handleResetActiveRaffle = () => {
-    const nextRaffles = raffles.map((r) => {
-      if (r.id !== activeRaffleId) return r;
-      return {
-        ...r,
-        reservations: {}
-      };
-    });
-
-    setRaffles(nextRaffles);
-    saveToStorage(nextRaffles);
+  const handleResetActiveRaffle = async () => {
+    await clearAllReservations(activeRaffleId);
   };
 
   // Callback to update general active raffle settings parameters
-  const handleSaveRaffleSettings = (updated: Raffle) => {
-    const nextRaffles = raffles.map((r) => {
-      if (r.id !== updated.id) return r;
-      return updated;
+  const handleSaveRaffleSettings = async (updated: Raffle) => {
+    await saveRaffleMetadata({
+      id: updated.id,
+      title: updated.title,
+      prize: updated.prize,
+      ticketPrice: updated.ticketPrice,
+      totalNumbers: updated.totalNumbers,
+      numberOffset: updated.numberOffset,
+      drawDate: updated.drawDate,
+      drawTime: updated.drawTime,
+      currency: updated.currency,
+      ticketColor: updated.ticketColor,
+      description: updated.description || '',
+      spreadsheetId: updated.spreadsheetId || '',
+      spreadsheetUrl: updated.spreadsheetUrl || '',
     });
-
-    setRaffles(nextRaffles);
-    saveToStorage(nextRaffles);
   };
 
   // Admin login actions

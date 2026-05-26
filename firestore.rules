@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-+:]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidRaffle(data) {
+      return data.id is string
+        && data.title is string && data.title.size() <= 200
+        && data.prize is string && data.prize.size() <= 300
+        && data.ticketPrice is number
+        && data.totalNumbers is number
+        && data.numberOffset is number
+        && data.drawDate is string
+        && data.drawTime is string
+        && data.currency is string
+        && data.ticketColor is string;
+    }
+
+    function isValidReservation(data) {
+      return data.number is number
+        && data.buyerName is string && data.buyerName.size() <= 150
+        && data.phone is string && data.phone.size() <= 50
+        && data.status is string && (data.status == 'PAGADO' || data.status == 'NO_PAGADO' || data.status == 'ABONADO')
+        && data.amountPaid is number
+        && data.reservedAt is string;
+    }
+
+    // Match patterns
+    match /raffles/{raffleId} {
+      allow read: if true;
+      allow create, update: if isValidId(raffleId) && (request.auth != null || true);
+      allow delete: if request.auth != null || true;
+
+      match /reservations/{numberId} {
+        allow read: if true;
+        allow write: if isValidId(numberId) && (request.auth != null || true);
+      }
+    }
+  }
+}
