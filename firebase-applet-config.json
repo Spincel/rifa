@@ -1,9 +1,10 @@
 {
   "projectId": "rifa-9d394",
-  "appId": "1:793111784517:web:7d7b619c53559abb02c72c",
+  "appId": "1:793111784517:web:a5d0159b279fcac602c72c",
   "apiKey": "AIzaSyCbxX3MGTZFK2GC4d-eY6pVwsKvKs6ladI",
   "authDomain": "rifa-9d394.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-978819c1-dd39-4339-9072-45902bd8eae2",
   "storageBucket": "rifa-9d394.firebasestorage.app",
   "messagingSenderId": "793111784517",
-  "measurementId": "G-JQNWS314GK"
+  "measurementId": ""
 }
