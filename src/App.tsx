@@ -61,6 +61,21 @@ export default function App() {
   // Google OAuth configuration states for persistent/on-demand sync
   const [googleUser, setGoogleUser] = useState<User | null>(null);
   const [googleToken, setGoogleToken] = useState<string | null>(null);
+  const [enableGoogleSync, setEnableGoogleSync] = useState(() => {
+    try {
+      return localStorage.getItem('ENABLE_GOOGLE_SHEETS_SYNC') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('ENABLE_GOOGLE_SHEETS_SYNC', String(enableGoogleSync));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [enableGoogleSync]);
 
   useEffect(() => {
     const unsubscribe = initAuth(
@@ -486,20 +501,51 @@ export default function App() {
           )}
 
           {activeTab === 'SETTINGS' && (
-            <>
+            <div className="space-y-6">
               <RaffleSettings
                 raffle={activeRaffle}
                 onSave={handleSaveRaffleSettings}
               />
-              <GoogleSheetsSync
-                raffle={activeRaffle}
-                onUpdateRaffle={handleSaveRaffleSettings}
-                googleUser={googleUser}
-                googleToken={googleToken}
-                setGoogleUser={setGoogleUser}
-                setGoogleToken={setGoogleToken}
-              />
-            </>
+
+              {/* Toggle configuration for Google Sheets Sync integration */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition hover:shadow-md duration-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-bold text-lg">
+                      📊
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-800">
+                        Integración con Google Sheets
+                      </h4>
+                      <p className="text-xs text-slate-400 font-medium">Respaldar y guardar boletos reservados automáticamente en tu propia nube.</p>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="relative inline-flex items-center cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={enableGoogleSync}
+                        onChange={(e) => setEnableGoogleSync(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {enableGoogleSync && (
+                <GoogleSheetsSync
+                  raffle={activeRaffle}
+                  onUpdateRaffle={handleSaveRaffleSettings}
+                  googleUser={googleUser}
+                  googleToken={googleToken}
+                  setGoogleUser={setGoogleUser}
+                  setGoogleToken={setGoogleToken}
+                />
+              )}
+            </div>
           )}
         </div>
       </main>
