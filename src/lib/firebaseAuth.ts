@@ -10,13 +10,22 @@ import firebaseConfig from '../../firebase-applet-config.json';
 // Resolve Firebase config with optional dynamic environment overrides for custom production hosting (e.g. Vercel)
 const metaEnv = (import.meta as { env?: Record<string, string> }).env || {};
 
+const userFirebaseConfig = {
+  apiKey: "AIzaSyCbxX3MGTZFK2GC4d-eY6pVwsKvKs6ladI",
+  authDomain: "rifa-9d394.firebaseapp.com",
+  projectId: "rifa-9d394",
+  storageBucket: "rifa-9d394.firebasestorage.app",
+  messagingSenderId: "793111784517",
+  appId: "1:793111784517:web:19168f5398106d4302c72c",
+};
+
 const resolvedConfig = {
-  apiKey: metaEnv.VITE_FIREBASE_API_KEY || firebaseConfig.apiKey,
-  authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfig.authDomain,
-  projectId: metaEnv.VITE_FIREBASE_PROJECT_ID || firebaseConfig.projectId,
-  storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket,
-  messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfig.messagingSenderId,
-  appId: metaEnv.VITE_FIREBASE_APP_ID || firebaseConfig.appId,
+  apiKey: metaEnv.VITE_FIREBASE_API_KEY || userFirebaseConfig.apiKey || firebaseConfig.apiKey,
+  authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN || userFirebaseConfig.authDomain || firebaseConfig.authDomain,
+  projectId: metaEnv.VITE_FIREBASE_PROJECT_ID || userFirebaseConfig.projectId || firebaseConfig.projectId,
+  storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET || userFirebaseConfig.storageBucket || firebaseConfig.storageBucket,
+  messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || userFirebaseConfig.messagingSenderId || firebaseConfig.messagingSenderId,
+  appId: metaEnv.VITE_FIREBASE_APP_ID || userFirebaseConfig.appId || firebaseConfig.appId,
 };
 
 // Reuse existing app or initialize layout
