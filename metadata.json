@@ -1,0 +1,6 @@
+{
+  "name": "Gestor de Rifas",
+  "description": "Herramienta para organizar rifas, reservar números, registrar pagos y generar boletos listos para enviar por WhatsApp.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

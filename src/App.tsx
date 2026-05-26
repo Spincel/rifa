@@ -1,0 +1,592 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.5
+ */
+
+import React, { useState, useEffect } from 'react';
+import { Ticket, FileSpreadsheet, BarChart3, Trophy, Settings, HelpCircle, Gift, Sparkles, Star, Lock, LogOut } from 'lucide-react';
+import { Raffle, TicketReservation } from './types';
+import RaffleSelector from './components/RaffleSelector';
+import RaffleGrid from './components/RaffleGrid';
+import TicketFormModal from './components/TicketFormModal';
+import RaffleStats from './components/RaffleStats';
+import RaffleSettings from './components/RaffleSettings';
+import RaffleListTable from './components/RaffleListTable';
+import RandomWinnerPicker from './components/RandomWinnerPicker';
+import { User } from 'firebase/auth';
+import { initAuth } from './lib/firebaseAuth';
+import GoogleSheetsSync from './components/GoogleSheetsSync';
+
+const LOCAL_STORAGE_KEY = 'GESTOR_DE_RIFAS_SESSION_DATA_v1';
+
+const DEFAULT_RAFFLES: Raffle[] = [
+  {
+    id: 'default-rifa-1',
+    title: 'Rifa Gran Canasta Navideña',
+    prize: 'Computadora Portátil y Canasta de Chocolates Premium',
+    ticketPrice: 100,
+    totalNumbers: 300,
+    numberOffset: 1,
+    drawDate: '2026-06-30',
+    drawTime: '20:00',
+    currency: 'MXN',
+    ticketColor: 'emerald',
+    reservations: {},
+    description: 'Sorteo pro-fondas de graduación escolar. El número ganador se elegirá de acuerdo con el premio de la Lotería de Fin de Mes.'
+  }
+];
+
+export default function App() {
+  const [raffles, setRaffles] = useState<Raffle[]>([]);
+  const [activeRaffleId, setActiveRaffleId] = useState<string>('');
+  const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<'GRID' | 'TABLE' | 'STATS' | 'DRAW' | 'SETTINGS'>('GRID');
+
+  // Admin authentication states
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    return sessionStorage.getItem('rifa_is_admin') === 'true';
+  });
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [usernameInput, setUsernameInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [loginError, setLoginError] = useState('');
+
+  // Automatically restrict activeTab to GRID for normal users
+  useEffect(() => {
+    if (!isAdmin && activeTab !== 'GRID') {
+      setActiveTab('GRID');
+    }
+  }, [isAdmin, activeTab]);
+
+  // Google OAuth configuration states for persistent/on-demand sync
+  const [googleUser, setGoogleUser] = useState<User | null>(null);
+  const [googleToken, setGoogleToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      (user, token) => {
+        setGoogleUser(user);
+        setGoogleToken(token);
+      },
+      () => {
+        setGoogleUser(null);
+        setGoogleToken(null);
+      }
+    );
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, []);
+
+  // 1. Initial State Loading from LocalStorage
+  useEffect(() => {
+    try {
+      const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (savedData) {
+        let parsed = JSON.parse(savedData);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // If the user's default raffle is untouched, update to 1 to 300
+          parsed = parsed.map((r: Raffle) => {
+            if (r.id === 'default-rifa-1' && r.totalNumbers === 100 && Object.keys(r.reservations).length === 0) {
+              return { ...r, totalNumbers: 300, numberOffset: 1 };
+            }
+            return r;
+          });
+          setRaffles(parsed);
+          setActiveRaffleId(parsed[0].id);
+          return;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load raffle database from local storage', e);
+    }
+
+    // Fallback block to seed state
+    setRaffles(DEFAULT_RAFFLES);
+    setActiveRaffleId(DEFAULT_RAFFLES[0].id);
+  }, []);
+
+  // 2. Synchronize any State changes directly back to localStorage
+  const saveToStorage = (updatedRaffles: Raffle[]) => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedRaffles));
+    } catch (e) {
+      console.error('Failed to save state to localStorage', e);
+    }
+  };
+
+  // Get active raffle configuration
+  const activeRaffle = raffles.find((r) => r.id === activeRaffleId) || raffles[0];
+
+  // Callback to create a brand new empty raffle
+  const handleCreateRaffle = (title: string, prize: string, price: number, total: number, color: string) => {
+    const newRaffle: Raffle = {
+      id: `raffle-id-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      title,
+      prize,
+      ticketPrice: price,
+      totalNumbers: total,
+      numberOffset: total === 300 ? 1 : 0,
+      drawDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days future
+      drawTime: '19:00',
+      currency: 'MXN',
+      ticketColor: color,
+      reservations: {},
+      description: 'Sorteo organizado de manera autónoma. ¡Apoya y gana!'
+    };
+
+    const nextRaffles = [newRaffle, ...raffles];
+    setRaffles(nextRaffles);
+    setActiveRaffleId(newRaffle.id);
+    saveToStorage(nextRaffles);
+  };
+
+  // Callback to erase/delete a raffle catalog
+  const handleDeleteRaffle = (id: string) => {
+    const nextRaffles = raffles.filter((r) => r.id !== id);
+    if (nextRaffles.length === 0) {
+      // Re-seed default so list never becomes empty of entities
+      const resetList = [...DEFAULT_RAFFLES];
+      setRaffles(resetList);
+      setActiveRaffleId(resetList[0].id);
+      saveToStorage(resetList);
+    } else {
+      setRaffles(nextRaffles);
+      setActiveRaffleId(nextRaffles[0].id);
+      saveToStorage(nextRaffles);
+    }
+  };
+
+  // Callback to save/overwrite a ticket reservation
+  const handleSaveReservation = (num: number, reservation: TicketReservation) => {
+    const nextRaffles = raffles.map((r) => {
+      if (r.id !== activeRaffleId) return r;
+      return {
+        ...r,
+        reservations: {
+          ...r.reservations,
+          [num]: reservation
+        }
+      };
+    });
+
+    setRaffles(nextRaffles);
+    saveToStorage(nextRaffles);
+  };
+
+  // Callback to delete/free a number reservation
+  const handleDeleteReservation = (num: number) => {
+    const nextRaffles = raffles.map((r) => {
+      if (r.id !== activeRaffleId) return r;
+      
+      const updatedReservations = { ...r.reservations };
+      delete updatedReservations[num];
+
+      return {
+        ...r,
+        reservations: updatedReservations
+      };
+    });
+
+    setRaffles(nextRaffles);
+    saveToStorage(nextRaffles);
+  };
+
+  // Callback to mass load imported reservations on a backup restore
+  const handleImportReservations = (imported: { [number: number]: TicketReservation }) => {
+    const nextRaffles = raffles.map((r) => {
+      if (r.id !== activeRaffleId) return r;
+      return {
+        ...r,
+        reservations: imported
+      };
+    });
+
+    setRaffles(nextRaffles);
+    saveToStorage(nextRaffles);
+  };
+
+  // Callback to clear/restart reservations of an active raffle
+  const handleResetActiveRaffle = () => {
+    const nextRaffles = raffles.map((r) => {
+      if (r.id !== activeRaffleId) return r;
+      return {
+        ...r,
+        reservations: {}
+      };
+    });
+
+    setRaffles(nextRaffles);
+    saveToStorage(nextRaffles);
+  };
+
+  // Callback to update general active raffle settings parameters
+  const handleSaveRaffleSettings = (updated: Raffle) => {
+    const nextRaffles = raffles.map((r) => {
+      if (r.id !== updated.id) return r;
+      return updated;
+    });
+
+    setRaffles(nextRaffles);
+    saveToStorage(nextRaffles);
+  };
+
+  // Admin login actions
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (usernameInput.trim() === 'admin' && passwordInput === '654321') {
+      setIsAdmin(true);
+      sessionStorage.setItem('rifa_is_admin', 'true');
+      setShowLoginModal(false);
+      setLoginError('');
+      setUsernameInput('');
+      setPasswordInput('');
+      setActiveTab('SETTINGS');
+    } else {
+      setLoginError('Usuario o contraseña incorrectos.');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAdmin(false);
+    sessionStorage.removeItem('rifa_is_admin');
+    setActiveTab('GRID');
+  };
+
+  if (!activeRaffle) {
+    return (
+      <div className="min-h-screen bg-slate-55 flex items-center justify-center text-slate-500 font-sans">
+        Cargando organizador de boletos...
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-slate-900 selection:text-white pb-16">
+      
+      {/* 1. Header Segment conforming to Clean Minimalism */}
+      <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-10 flex-none sticky top-0 z-40 shadow-sm font-sans">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-xl select-none shadow-sm">R</div>
+          <h1 className="text-base md:text-lg font-semibold tracking-tight text-slate-800 truncate max-w-[150px] sm:max-w-md">
+            Sorteo Pro <span className="text-slate-400 font-normal">· {activeRaffle.title}</span>
+          </h1>
+        </div>
+        <div className="flex gap-4 items-center">
+          {isAdmin ? (
+            <>
+              <div className="flex flex-col items-end shrink-0">
+                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Recaudación</span>
+                <span className="text-sm md:text-lg font-mono font-bold text-emerald-600">
+                  {new Intl.NumberFormat('es-MX', { style: 'currency', currency: activeRaffle.currency, minimumFractionDigits: 0 }).format(
+                    (Object.values(activeRaffle.reservations) as TicketReservation[]).reduce((acc: number, current) => acc + current.amountPaid, 0)
+                  )}
+                </span>
+              </div>
+              <div className="w-[1px] h-10 bg-slate-200"></div>
+              <button
+                onClick={handleLogout}
+                className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-full text-xs md:text-sm font-semibold transition shrink-0 cursor-pointer flex items-center gap-2"
+                title="Cerrar sesión de administrador"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Cerrar Sesión</span>
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setShowLoginModal(true)}
+              id="gear-admin-login-btn"
+              className="p-2.5 text-slate-650 text-slate-600 hover:text-indigo-600 hover:bg-slate-50 border border-slate-200 rounded-xl transition duration-150 flex items-center space-x-2 cursor-pointer shadow-xs bg-white text-xs font-semibold font-sans"
+              title="Acceso de Administrador"
+            >
+              <Settings className="w-4.5 h-4.5 text-slate-500 hover:text-indigo-600 transition animate-[spin_12s_linear_infinite]" />
+              <span className="text-slate-700 text-xs font-bold">Administrador</span>
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* 2. Primary Navigation Tabs Dashboard */}
+      <main className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-8">
+        
+        {/* If Not Admin, render a highly detailed beautifully polished overview banner card */}
+        {!isAdmin && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-xs relative overflow-hidden font-sans animate-fade-in mb-4">
+            <div className="absolute top-0 right-0 w-36 h-36 bg-indigo-500/5 rounded-full -mr-8 -mt-8"></div>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative">
+              <div className="space-y-2">
+                <div className="inline-flex items-center space-x-1.5 bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider">
+                  🏆 Sorteo Activo
+                </div>
+                <h2 className="text-lg md:text-xl font-bold text-slate-900 tracking-tight">
+                  {activeRaffle.title}
+                </h2>
+                <p className="text-xs text-slate-500 leading-relaxed max-w-2xl font-normal">
+                  {activeRaffle.description || 'Sorteo organizado de manera autónoma. ¡Apoya y gana con nosotros!'}
+                </p>
+                <div className="flex flex-wrap gap-2 mt-2 pt-1 font-sans">
+                  <span className="inline-flex items-center text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 px-3 py-1.5 rounded-lg">
+                    <Gift className="w-4 h-4 mr-1 text-emerald-600" />
+                    <strong>Premio:</strong>&nbsp;{activeRaffle.prize}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex flex-row md:flex-col gap-4 shrink-0 md:text-right border-t md:border-t-0 border-slate-100 pt-4 md:pt-0">
+                <div className="flex-1 md:flex-initial">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Costo Boleto</span>
+                  <span className="text-lg md:text-xl font-mono font-black text-slate-900 font-bold">
+                    {new Intl.NumberFormat('es-MX', { style: 'currency', currency: activeRaffle.currency, minimumFractionDigits: 0 }).format(activeRaffle.ticketPrice)}
+                  </span>
+                </div>
+                <div className="flex-1 md:flex-initial">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider font-sans">Fecha del Sorteo</span>
+                  <span className="text-xs font-semibold text-slate-700 font-sans">
+                    {activeRaffle.drawDate === 'Por definir' ? 'Por definir ⏳' : `${activeRaffle.drawDate.split('-').reverse().join('/')} a las ${activeRaffle.drawTime} hrs`}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Grid panel: Left side Raffle selector / Right side visual dashboard display - ONLY VISIBLE TO LOGGED IN ADMIN */}
+        {isAdmin && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start font-sans">
+            <div className="lg:col-span-2">
+              <RaffleSelector
+                raffles={raffles}
+                activeRaffleId={activeRaffleId}
+                onSelect={setActiveRaffleId}
+                onCreateRaffle={handleCreateRaffle}
+                onDeleteRaffle={handleDeleteRaffle}
+              />
+            </div>
+            <div className="bg-white text-slate-900 rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between h-full min-h-[148px] overflow-hidden relative">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full -mr-6 -mt-6"></div>
+              <div>
+                <p className="text-[11px] uppercase font-bold text-slate-400 tracking-wider">Total Recaudado en esta Rifa:</p>
+                <h2 className="text-3xl font-extrabold tracking-tight text-emerald-600 mt-1 font-mono">
+                  {new Intl.NumberFormat('es-MX', { style: 'currency', currency: activeRaffle.currency, minimumFractionDigits: 0 }).format(
+                    (Object.values(activeRaffle.reservations) as TicketReservation[]).reduce((acc: number, current) => acc + current.amountPaid, 0)
+                  )}
+                </h2>
+              </div>
+              <div className="text-xs text-slate-500 pt-3 border-t border-slate-100 font-medium flex items-center justify-between font-sans">
+                <span>Boletos: <strong className="text-slate-800">{Object.keys(activeRaffle.reservations).length}</strong> de {activeRaffle.totalNumbers}</span>
+                <span className="text-indigo-600 font-mono font-bold bg-indigo-50 px-2 py-0.5 rounded text-[10px]">Cloud Sync Active</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Dashboard Section switcher controls - ONLY VISIBLE TO LOGGED IN ADMIN */}
+        {isAdmin && (
+          <div className="flex bg-white p-1.5 rounded-2xl border border-slate-205 border-slate-200/60 shadow-sm overflow-x-auto gap-1">
+            <button
+              onClick={() => setActiveTab('GRID')}
+              id="tab-nav-grid"
+              className={`px-4.5 py-3 text-xs font-bold rounded-xl transition flex items-center space-x-2 shrink-0 ${
+                activeTab === 'GRID'
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <Ticket className="w-4 h-4" />
+              <span>Apartar Números</span>
+            </button>
+            
+            <button
+              onClick={() => setActiveTab('TABLE')}
+              id="tab-nav-table"
+              className={`px-4.5 py-3 text-xs font-bold rounded-xl transition flex items-center space-x-2 shrink-0 ${
+                activeTab === 'TABLE'
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>Participantes</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('STATS')}
+              id="tab-nav-stats"
+              className={`px-4.5 py-3 text-xs font-bold rounded-xl transition flex items-center space-x-2 shrink-0 ${
+                activeTab === 'STATS'
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span>Finanzas y Avance</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('DRAW')}
+              id="tab-nav-draw"
+              className={`px-4.5 py-3 text-xs font-bold rounded-xl transition flex items-center space-x-2 shrink-0 ${
+                activeTab === 'DRAW'
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <Trophy className="w-4 h-4" />
+              <span>Tómbola Sorteo</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('SETTINGS')}
+              id="tab-nav-settings"
+              className={`px-4.5 py-3 text-xs font-bold rounded-xl transition flex items-center space-x-2 shrink-0 ${
+                activeTab === 'SETTINGS'
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <Settings className="w-4 h-4" />
+              <span>Ajustes</span>
+            </button>
+          </div>
+        )}
+
+        {/* 3. Primary Tab views render switch logic */}
+        <div className="space-y-6">
+          {activeTab === 'GRID' && (
+            <RaffleGrid
+              raffle={activeRaffle}
+              selectedNumber={selectedNumber}
+              onSelectNumber={(num) => setSelectedNumber(num)}
+            />
+          )}
+
+          {activeTab === 'TABLE' && (
+            <RaffleListTable
+              raffle={activeRaffle}
+              onEditTicket={(num) => {
+                setSelectedNumber(num);
+              }}
+              onDeleteTicket={(num) => {
+                handleDeleteReservation(num);
+              }}
+              onImportReservations={handleImportReservations}
+              onResetRaffle={handleResetActiveRaffle}
+            />
+          )}
+
+          {activeTab === 'STATS' && (
+            <RaffleStats raffle={activeRaffle} />
+          )}
+
+          {activeTab === 'DRAW' && (
+            <RandomWinnerPicker raffle={activeRaffle} />
+          )}
+
+          {activeTab === 'SETTINGS' && (
+            <>
+              <RaffleSettings
+                raffle={activeRaffle}
+                onSave={handleSaveRaffleSettings}
+              />
+              <GoogleSheetsSync
+                raffle={activeRaffle}
+                onUpdateRaffle={handleSaveRaffleSettings}
+                googleUser={googleUser}
+                googleToken={googleToken}
+                setGoogleUser={setGoogleUser}
+                setGoogleToken={setGoogleToken}
+              />
+            </>
+          )}
+        </div>
+      </main>
+
+      {/* 4. Overlay Modals for Ticket Registration Form */}
+      {selectedNumber !== null && (
+        <TicketFormModal
+          raffle={activeRaffle}
+          number={selectedNumber}
+          onSave={(num, reservation) => {
+            handleSaveReservation(num, reservation);
+            // Don't close immediately to allow downloading the ticket inside modal tabs
+          }}
+          onDelete={(num) => {
+            handleDeleteReservation(num);
+            setSelectedNumber(null);
+          }}
+          onClose={() => setSelectedNumber(null)}
+        />
+      )}
+
+      {/* 5. Overlay Modal for Admin Login Gate */}
+      {showLoginModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in font-sans">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 md:p-8 max-w-sm w-full shadow-2xl relative">
+            <button
+              onClick={() => {
+                setShowLoginModal(false);
+                setLoginError('');
+                setUsernameInput('');
+                setPasswordInput('');
+              }}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition p-1 rounded-full hover:bg-slate-100 cursor-pointer"
+            >
+              ✕
+            </button>
+            <div className="flex flex-col items-center text-center space-y-3 mb-6 font-sans">
+              <div className="w-12 h-12 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-full flex items-center justify-center shadow-xs">
+                <Lock className="w-4.5 h-4.5" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900">Acceso de Administrador</h3>
+              <p className="text-xs text-slate-500 max-w-[240px]">
+                Inicie sesión para acceder a finanzas, participantes, ajustes globales y tómbola.
+              </p>
+            </div>
+            
+            <form onSubmit={handleLoginSubmit} className="space-y-4 font-sans">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-600 block text-left uppercase tracking-wider">Usuario</label>
+                <input
+                  type="text"
+                  required
+                  value={usernameInput}
+                  onChange={(e) => setUsernameInput(e.target.value)}
+                  placeholder="admin"
+                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-600 block text-left uppercase tracking-wider">Contraseña</label>
+                <input
+                  type="password"
+                  required
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  placeholder="******"
+                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+
+              {loginError && (
+                <div className="text-xs text-rose-600 bg-rose-50 border border-rose-100 rounded-lg p-2.5 text-center font-semibold">
+                  ⚠️ {loginError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="w-full bg-slate-900 hover:bg-black text-white font-bold text-xs uppercase tracking-wider py-3.5 rounded-xl transition duration-150 cursor-pointer flex items-center justify-center gap-2 shadow-md leading-none h-11"
+              >
+                <span>Entrar al Panel</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
