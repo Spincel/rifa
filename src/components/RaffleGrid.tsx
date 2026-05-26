@@ -171,8 +171,7 @@ export default function RaffleGrid({ raffle, onSelectNumber, selectedNumber }: R
       <div className="relative">
         {/* Dynamic Display Grid */}
         <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2.5 max-h-[480px] overflow-y-auto p-1 bg-slate-50/50 rounded-2xl border border-slate-200/40">
-          {numbersList.map((num) => {
-            const matches = passesFilter(num);
+          {numbersList.filter(passesFilter).map((num) => {
             const r = reservations[num];
             const fmt = formatTicketNumber(num, totalNumbers);
 
@@ -181,10 +180,9 @@ export default function RaffleGrid({ raffle, onSelectNumber, selectedNumber }: R
                 key={num}
                 id={`grid-number-btn-${num}`}
                 onClick={() => onSelectNumber(num)}
-                disabled={statusFilter !== 'ALL' && !matches}
                 className={`aspect-square sm:aspect-video md:aspect-square flex flex-col items-center justify-center rounded-xl text-sm font-mono tracking-tight transition duration-200 outline-none cursor-pointer ${getNumberColorClass(
                   num
-                )} ${!matches ? 'opacity-25 pointer-events-none' : 'opacity-100'}`}
+                )}`}
               >
                 <span className="text-base font-bold">{fmt}</span>
                 {r && (
